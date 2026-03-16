@@ -1041,7 +1041,15 @@
             updateFileSelectionUI();
             updatePdfList();
 
-            addMessage('assistant', `✅ Successfully uploaded ${uploadedCount}/${files.length} PDF(s)! Click "Start Study" to begin.`);
+            addMessage('assistant', `✅ Successfully uploaded ${uploadedCount}/${files.length} PDF(s)!`);
+            
+            // Automatically start study session after upload
+            if (uploadedCount > 0) {
+                setTimeout(() => {
+                    startStudySession();
+                }, 500);
+            }
+            
             event.target.value = '';
         }
 
@@ -1051,8 +1059,11 @@
             clearMessages();
             document.getElementById('predictedQuestionsList').innerHTML = '';
             document.getElementById('currentSessionId') = 'session_' + Date.now();
+            document.getElementById('startStudyBtn').style.display = 'none';
+            document.getElementById('clearFilesBtn').style.display = 'none';
+            document.querySelector('.pdf-upload').textContent = '📁 Select PDFs to Study';
             updateFileSelectionUI();
-            addMessage('assistant', '📚 Selection cleared. Upload PDFs to get started.');
+            addMessage('assistant', '📂 Selection cleared. Upload or select PDFs to get started.');
         }
 
         // Start a study session with selected PDFs
@@ -1070,7 +1081,12 @@
                 return `• ${pdf ? pdf.filename || pdf.originalName : 'Unknown'}`;
             }).join('\n');
 
-            addMessage('assistant', `📚 Study session started with ${selectedPdfIds.length} PDF(s):\n\n${filesList}\n\nYou can ask questions about these materials or generate predicted exam questions below.`);
+            addMessage('assistant', `📚 Study session started with ${selectedPdfIds.length} PDF(s):\n\n${filesList}\n\n💬 Ask questions about these materials. You can also generate predicted exam questions below.`);
+            
+            // Hide the Start Study and Clear buttons when session is active
+            document.getElementById('startStudyBtn').style.display = 'none';
+            document.getElementById('clearFilesBtn').style.display = 'block';
+            document.querySelector('.pdf-upload').textContent = '📁 Add More PDFs';
         }
 
         // Generate predicted questions
@@ -1298,7 +1314,9 @@
             currentSessionId = 'session_' + Date.now();
             clearMessages();
             document.getElementById('predictedQuestionsList').innerHTML = '';
-            addMessage('assistant', '📚 New study session started. Select PDFs and ask your questions!');
+            document.getElementById('startStudyBtn').style.display = 'none';
+            document.getElementById('clearFilesBtn').style.display = 'block';
+            addMessage('assistant', '📚 New study session started. You can ask questions about your PDFs!');
         }
 
         // Handle Enter key
