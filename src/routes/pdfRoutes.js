@@ -3,9 +3,10 @@ const router = express.Router();
 const upload = require('../middleware/uploadMiddleware');
 const PdfService = require('../services/pdfService');
 const aiService = require('../services/aiService');
+const Chat = require('../models/Chat');
 const { body, validationResult } = require('express-validator');
 
-// Upload PDF with error handling
+// Upload single PDF with error handling
 router.post('/upload', (req, res, next) => {
   upload.single('pdf')(req, res, (err) => {
     if (err) {
@@ -23,9 +24,9 @@ router.post('/upload', (req, res, next) => {
       return res.status(400).json({ error: 'No file provided' });
     }
 
-    console.log('Extracting text from PDF...');
-    // Extract text from PDF
-    const { text, pages } = await PdfService.extractTextFromPdf(req.file.path);
+    console.log('Extracting text from file...');
+    // Extract text from file (PDF, Excel, or Word)
+    const { text, pages } = await PdfService.extractTextFromFile(req.file.path, req.file.mimetype);
     console.log('Text extracted, length:', text.length);
 
     // Generate summary (disabled for testing)
@@ -36,16 +37,16 @@ router.post('/upload', (req, res, next) => {
     //   console.warn('Summary generation failed:', summaryError.message);
     // }
 
-    console.log('Saving PDF to database...');
-    // Save PDF to database
+    console.log('Saving document to database...');
+    // Save document to database
     const pdf = await PdfService.savePdf(req.file, text, summary);
     pdf.pages = pages;
     await pdf.save();
-    console.log('PDF saved, ID:', pdf._id);
+    console.log('Document saved, ID:', pdf._id);
 
     res.status(201).json({
       success: true,
-      message: 'PDF uploaded successfully',
+      message: 'Document uploaded successfully',
       pdfId: pdf._id,
       filename: pdf.originalName,
       pages: pages,
@@ -53,6 +54,67 @@ router.post('/upload', (req, res, next) => {
     });
   } catch (error) {
     console.error('Upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Batch upload multiple PDFs
+router.post('/upload-batch', (req, res, next) => {
+  upload.array('pdfs', 10)(req, res, (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files provided' });
+    }
+
+    const uploadedPdfs = [];
+    const errors = [];
+
+    for (const file of req.files) {
+      try {
+        console.log(`Processing file: ${file.originalname}`);
+        
+        const { text, pages } = await PdfService.extractTextFromFile(file.path, file.mimetype);
+        let summary = null;
+
+        const pdf = await PdfService.savePdf(file, text, summary);
+        pdf.pages = pages;
+        await pdf.save();
+
+        uploadedPdfs.push({
+          pdfId: pdf._id,
+          filename: pdf.originalName,
+          pages: pages,
+          status: 'success'
+        });
+
+      } catch (fileError) {
+        console.error(`Error processing ${file.originalname}:`, fileError);
+        errors.push({
+          filename: file.originalname,
+          error: fileError.message,
+          status: 'failed'
+        });
+      }
+    }
+
+    res.status(201).json({
+      success: uploadedPdfs.length > 0,
+      message: `${uploadedPdfs.length} file(s) uploaded successfully`,
+      uploadedPdfs,
+      failedPdfs: errors,
+      totalAttempted: req.files.length,
+      successCount: uploadedPdfs.length,
+      failureCount: errors.length
+    });
+  } catch (error) {
+    console.error('Batch upload error:', error);
     res.status(500).json({ error: error.message });
   }
 });

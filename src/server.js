@@ -28,6 +28,17 @@ dotenv.config();
 // Import routes
 const pdfRoutes = require('./routes/pdfRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const authRoutes = require('./routes/authRoutes');
+const feedbackRoutes = require('./routes/feedbackRoutes');
+const bookmarkRoutes = require('./routes/bookmarkRoutes');
+const shareRoutes = require('./routes/shareRoutes');
+const exportRoutes = require('./routes/exportRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
+
+// Import middleware
+const authMiddleware = require('./middleware/authMiddleware');
+const { apiLimiter, chatLimiter, publicLimiter } = require('./middleware/rateLimitMiddleware');
+const loggerMiddleware = require('./middleware/loggerMiddleware');
 
 const app = express();
 
@@ -56,6 +67,12 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Apply logger middleware
+app.use(loggerMiddleware);
+
+// Apply rate limiting
+app.use('/api/', apiLimiter);
+
 // Create uploads directory if it doesn't exist
 const uploadDir = path.join(__dirname, '../uploads');
 if (!require('fs').existsSync(uploadDir)) {
@@ -71,8 +88,21 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pdf-chatb
 .catch(err => console.error('MongoDB connection error:', err));
 
 // API Routes
-app.use('/api/pdf', pdfRoutes);
-app.use('/api/chat', chatRoutes);
+// Public routes
+app.use('/api/auth', authRoutes);
+app.use('/api/share', shareRoutes);
+
+// PDF routes (with chat limiter)
+app.use('/api/pdf', chatLimiter, pdfRoutes);
+
+// Chat routes (with chat limiter)
+app.use('/api/chat', chatLimiter, chatRoutes);
+
+// Protected routes (require authentication)
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/bookmarks', bookmarkRoutes);
+app.use('/api/export', exportRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

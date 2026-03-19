@@ -897,11 +897,11 @@
         <div class="messages-container" id="messagesContainer">
             <div class="empty-state">
                 <div class="empty-icon">📚</div>
-                <h2 style="font-size: 20px; margin-bottom: 8px;">Welcome to PDF Chatbot</h2>
-                <p style="margin-bottom: 24px;">Upload a PDF document to start asking questions</p>
+                <h2 style="font-size: 20px; margin-bottom: 8px;">Welcome to Document Chatbot</h2>
+                <p style="margin-bottom: 24px;">Upload PDFs, Excel, or Word documents to start asking questions</p>
                 <div style="display: flex; gap: 12px;">
                     <button class="pdf-upload" onclick="document.getElementById('fileInput').click()">
-                        📁 Upload PDF
+                        📁 Upload Documents
                     </button>
                     <button class="pdf-upload" onclick="alert('Demo PDFs coming soon!')" style="opacity: 0.5;">
                         📄 Load Demo
@@ -931,7 +931,7 @@
             <!-- File Management -->
             <div class="pdf-selector">
                 <button class="pdf-upload" onclick="document.getElementById('fileInput').click()" style="flex: 1;">
-                    📁 Select PDFs to Study
+                    📁 Select Documents to Study
                 </button>
                 <button class="pdf-upload" onclick="startStudySession()" id="startStudyBtn" style="display: none; flex: 1;">
                     ✓ Start Study
@@ -947,7 +947,7 @@
                     <div class="input-area">
                         <textarea 
                             id="questionInput" 
-                            placeholder="Ask anything about your PDFs..."
+                            placeholder="Ask anything about your documents..."
                             rows="1"
                             onkeydown="handleKeydown(event)"
                         ></textarea>
@@ -957,14 +957,14 @@
                     </div>
                 </div>
                 <div class="info-text">
-                    💡 Select multiple PDFs, then ask questions. Predictions help you prepare for exams. Powered by Google Gemini
+                    💡 Supports PDF, Excel (.xlsx/.xls), and Word (.docx/.doc) files. Select multiple files, then ask questions. Predictions help you prepare for exams. Powered by Google Gemini
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Hidden File Input -->
-    <input type="file" id="fileInput" accept=".pdf" multiple onchange="uploadMultiplePdfs(event)">
+    <input type="file" id="fileInput" accept=".pdf,.xlsx,.xls,.docx,.doc" multiple onchange="uploadMultiplePdfs(event)">
 
     <script>
         const API_URL = 'http://localhost:5000/api';

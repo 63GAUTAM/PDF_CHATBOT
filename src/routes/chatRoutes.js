@@ -107,12 +107,71 @@ router.get('/history/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const chat = await ChatService.getChatHistory(sessionId);
+    const chat = await ChatService.getDetailedChatHistory(sessionId);
 
     res.json({
-      messages: chat.messages || [],
-      predictedQuestions: chat.predictedQuestions || [],
-      sessionId
+      success: true,
+      data: chat
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all conversations with pagination
+router.get('/conversations', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = parseInt(req.query.skip) || 0;
+    const sortBy = req.query.sort || 'updatedAt';
+
+    const result = await ChatService.getAllConversations(limit, skip, sortBy);
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get recent conversations
+router.get('/recent', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 5;
+    const conversations = await ChatService.getRecentConversations(limit);
+
+    res.json({
+      success: true,
+      data: {
+        recentConversations: conversations
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Search chat history
+router.get('/search', async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || query.trim().length === 0) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+
+    const limit = parseInt(req.query.limit) || 10;
+    const results = await ChatService.searchChats(query, limit);
+
+    res.json({
+      success: true,
+      data: {
+        query,
+        resultCount: results.length,
+        results
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -144,5 +203,101 @@ router.get('/sessions', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Set or update conversation title
+router.put('/session/:sessionId/title',
+  body('title').notEmpty().withMessage('Title is required').trim(),
+  body('description').optional().trim(),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { sessionId } = req.params;
+      const { title, description } = req.body;
+
+      const chat = await ChatService.updateConversationTitle(sessionId, title, description);
+
+      res.json({
+        success: true,
+        message: 'Conversation title updated',
+        data: {
+          sessionId: chat.sessionId,
+          title: chat.title,
+          description: chat.description
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Add tags to conversation
+router.post('/session/:sessionId/tags',
+  body('tags').isArray().withMessage('Tags must be an array'),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { sessionId } = req.params;
+      const { tags } = req.body;
+
+      const chat = await ChatService.addTagsToConversation(sessionId, tags);
+
+      res.json({
+        success: true,
+        message: 'Tags added to conversation',
+        data: {
+          sessionId: chat.sessionId,
+          tags: chat.tags
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Bookmark a conversation
+router.post('/session/:sessionId/bookmark',
+  async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+
+      const chat = await ChatService.bookmarkConversation(sessionId);
+
+      res.json({
+        success: true,
+        message: chat.isBookmarked ? 'Conversation bookmarked' : 'Bookmark removed',
+        isBookmarked: chat.isBookmarked
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Get bookmarked conversations
+router.get('/bookmarked',
+  async (req, res) => {
+    try {
+      const bookmarked = await ChatService.getBookmarkedConversations();
+
+      res.json({
+        success: true,
+        count: bookmarked.length,
+        data: bookmarked
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
 module.exports = router;

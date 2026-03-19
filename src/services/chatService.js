@@ -143,6 +143,226 @@ class ChatService {
       throw new Error(`Failed to get sessions: ${error.message}`);
     }
   }
+
+  /**
+   * Get all conversations with pagination
+   */
+  static async getAllConversations(limit = 10, skip = 0, sortBy = 'updatedAt') {
+    try {
+      const total = await Chat.countDocuments();
+      
+      const conversations = await Chat.find({})
+        .populate('pdfIds', 'originalName')
+        .sort({ [sortBy]: -1 })
+        .limit(limit)
+        .skip(skip)
+        .select('sessionId pdfIds messages predictedQuestions createdAt updatedAt');
+
+      const formattedConversations = conversations.map(chat => ({
+        sessionId: chat.sessionId,
+        pdfNames: chat.pdfIds.map(pdf => pdf.originalName),
+        messageCount: chat.messages.length,
+        lastMessage: chat.messages.length > 0 ? chat.messages[chat.messages.length - 1] : null,
+        hasQuestions: chat.predictedQuestions && chat.predictedQuestions.length > 0,
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt
+      }));
+
+      return {
+        total,
+        limit,
+        skip,
+        conversations: formattedConversations
+      };
+    } catch (error) {
+      throw new Error(`Failed to get conversations: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get detailed chat history with formatted messages
+   */
+  static async getDetailedChatHistory(sessionId) {
+    try {
+      const chat = await Chat.findOne({ sessionId }).populate('pdfIds', 'originalName');
+      
+      if (!chat) {
+        return {
+          sessionId,
+          pdfNames: [],
+          messageCount: 0,
+          messages: [],
+          predictedQuestions: [],
+          createdAt: null,
+          updatedAt: null
+        };
+      }
+
+      return {
+        sessionId: chat.sessionId,
+        pdfNames: chat.pdfIds.map(pdf => pdf.originalName),
+        messageCount: chat.messages.length,
+        messages: chat.messages.map((msg, index) => ({
+          id: `msg-${index}`,
+          question: msg.question,
+          answer: msg.answer,
+          timestamp: msg.createdAt || new Date(),
+          confidence: msg.confidence || 0.8
+        })),
+        predictedQuestions: chat.predictedQuestions || [],
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt
+      };
+    } catch (error) {
+      throw new Error(`Failed to get detailed chat history: ${error.message}`);
+    }
+  }
+
+  /**
+   * Search chat history
+   */
+  static async searchChats(searchQuery, limit = 10) {
+    try {
+      const chats = await Chat.find({
+        $or: [
+          { sessionId: { $regex: searchQuery, $options: 'i' } },
+          { 'messages.question': { $regex: searchQuery, $options: 'i' } },
+          { 'messages.answer': { $regex: searchQuery, $options: 'i' } }
+        ]
+      })
+        .populate('pdfIds', 'originalName')
+        .limit(limit)
+        .select('sessionId pdfIds messages predictedQuestions createdAt updatedAt');
+
+      return chats.map(chat => ({
+        sessionId: chat.sessionId,
+        pdfNames: chat.pdfIds.map(pdf => pdf.originalName),
+        messageCount: chat.messages.length,
+        lastMessage: chat.messages.length > 0 ? chat.messages[chat.messages.length - 1] : null,
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt
+      }));
+    } catch (error) {
+      throw new Error(`Failed to search chats: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get recent conversations
+   */
+  static async getRecentConversations(limit = 5) {
+    try {
+      const conversations = await Chat.find({})
+        .populate('pdfIds', 'originalName')
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .select('sessionId pdfIds messages predictedQuestions createdAt updatedAt title isBookmarked tags');
+
+      return conversations.map(chat => ({
+        sessionId: chat.sessionId,
+        title: chat.title,
+        pdfNames: chat.pdfIds.map(pdf => pdf.originalName),
+        messageCount: chat.messages.length,
+        lastMessage: chat.messages.length > 0 ? {
+          question: chat.messages[chat.messages.length - 1].question,
+          preview: chat.messages[chat.messages.length - 1].answer.substring(0, 100) + '...',
+          timestamp: chat.messages[chat.messages.length - 1].createdAt
+        } : null,
+        isBookmarked: chat.isBookmarked,
+        tags: chat.tags,
+        updatedAt: chat.updatedAt
+      }));
+    } catch (error) {
+      throw new Error(`Failed to get recent conversations: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update conversation title
+   */
+  static async updateConversationTitle(sessionId, title, description = null) {
+    try {
+      const chat = await Chat.findOneAndUpdate(
+        { sessionId },
+        { title, description },
+        { new: true }
+      );
+
+      if (!chat) {
+        throw new Error('Conversation not found');
+      }
+
+      return chat;
+    } catch (error) {
+      throw new Error(`Failed to update title: ${error.message}`);
+    }
+  }
+
+  /**
+   * Add tags to conversation
+   */
+  static async addTagsToConversation(sessionId, tags) {
+    try {
+      const chat = await Chat.findOne({ sessionId });
+
+      if (!chat) {
+        throw new Error('Conversation not found');
+      }
+
+      // Merge and deduplicate tags
+      const allTags = [...new Set([...chat.tags, ...tags])];
+      chat.tags = allTags;
+
+      await chat.save();
+      return chat;
+    } catch (error) {
+      throw new Error(`Failed to add tags: ${error.message}`);
+    }
+  }
+
+  /**
+   * Bookmark a conversation
+   */
+  static async bookmarkConversation(sessionId) {
+    try {
+      const chat = await Chat.findOne({ sessionId });
+
+      if (!chat) {
+        throw new Error('Conversation not found');
+      }
+
+      chat.isBookmarked = !chat.isBookmarked;
+      await chat.save();
+
+      return chat;
+    } catch (error) {
+      throw new Error(`Failed to bookmark conversation: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get bookmarked conversations
+   */
+  static async getBookmarkedConversations() {
+    try {
+      const bookmarked = await Chat.find({ isBookmarked: true })
+        .populate('pdfIds', 'originalName')
+        .sort({ updatedAt: -1 })
+        .select('sessionId pdfIds messages title createdAt updatedAt tags');
+
+      return bookmarked.map(chat => ({
+        sessionId: chat.sessionId,
+        title: chat.title,
+        pdfNames: chat.pdfIds.map(pdf => pdf.originalName),
+        messageCount: chat.messages.length,
+        tags: chat.tags,
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt
+      }));
+    } catch (error) {
+      throw new Error(`Failed to get bookmarked conversations: ${error.message}`);
+    }
+  }
 }
 
 module.exports = ChatService;
